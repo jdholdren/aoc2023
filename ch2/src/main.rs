@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::File;
 use std::io::BufRead;
 use std::iter::Peekable;
@@ -8,34 +9,51 @@ use std::str::Chars;
 /// The first pass is just lexing a line into tokens that we care about, and then
 /// the parser is run on that line of tokens to figure out what happened in the game.
 
+fn print_usage() {
+    print!("\n cargo run -- <1 or 2>");
+}
+
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.is_empty() {
+        print_usage();
+        return;
+    }
+    let part: usize = args.get(0).unwrap().parse().unwrap();
+
     // Read input
     let f = File::open("./ch2/input.txt").unwrap();
 
     // Line by line, lex tokens -> parser -> Create a Game
-    let total = std::io::BufReader::new(f)
+    let parsed = std::io::BufReader::new(f)
         .lines()
         .map(|line| line.unwrap())
         .map(|line| lex(&line))
-        .map(|tokens| parse(tokens))
-        // Part 1:
-        //.filter(|game| game.within_bounds(12, 13, 14))
-        //.fold(0, |acc, e| acc + e.id);
-        .map(|g| g.power())
-        .reduce(|acc, e| acc + e);
+        .map(parse);
 
-    println!("total: {}", total.unwrap());
+    let total = match part {
+        1 => parsed
+            .filter(|game| game.within_bounds(12, 13, 14))
+            .fold(0, |acc, e| acc + e.id),
+        2 => parsed.map(|g| g.power()).reduce(|acc, e| acc + e).unwrap(),
+        _ => {
+            print_usage();
+            return;
+        }
+    };
+
+    println!("total: {}", total);
 }
 
 // GameInstance is a line from the input and has a certain set of draws in it.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 struct GameInstance {
     id: u32,
     draws: Vec<Draw>,
 }
 
 // A Draw is a number of cubes that were pulled out at a time.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 struct Draw {
     red: u32,
     green: u32,
@@ -72,16 +90,6 @@ impl GameInstance {
         }
 
         r_max * b_max * g_max
-    }
-}
-
-impl Default for Draw {
-    fn default() -> Self {
-        Draw {
-            red: 0,
-            blue: 0,
-            green: 0,
-        }
     }
 }
 
@@ -168,7 +176,7 @@ fn read_number(cs: &mut Peekable<Chars>) -> u32 {
 
     // Read until the next non-numeric character, filling the buffer.
     while let Some(c) = cs.peek() {
-        if !c.is_digit(10) {
+        if !c.is_ascii_digit() {
             break;
         }
 
@@ -180,10 +188,9 @@ fn read_number(cs: &mut Peekable<Chars>) -> u32 {
 }
 
 fn parse(ts: Vec<Token>) -> GameInstance {
-    let mut tokens = ts.into_iter().filter(|token| match token {
-        Token::Comma | Token::Colon | Token::Space => false,
-        _ => true,
-    });
+    let mut tokens = ts
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Comma | Token::Colon | Token::Space));
     let mut g = GameInstance {
         id: 0,
         draws: vec![],
